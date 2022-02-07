@@ -65,6 +65,8 @@ Created by Jake K. Eager
 #define INITIAL_DEEP_TEMP_DATA "input_data/ProCb/surface_temperature.dat"
 #define U_WIND_DATA "input_data/ProCb/x_wind.dat"
 #define V_WIND_DATA "input_data/ProCb/y_wind.dat"
+#define LATS_FILE "input_data/lats.dat"
+#define LONS_FILE "input_data/lons.dat"
 // output data files
 #define MAX_FNAME_CHAR 100
 #define PYTHON_EXE "python"
@@ -73,8 +75,7 @@ Created by Jake K. Eager
 #define OUTPUT_SURFACE_TEMP_DATA "output_data/ProCb/T_surf_"
 #define OUTPUT_DEEP_TEMP_DATA "output_data/ProCb/T_deep_"
 #define OUTPUT_DATA_EXT "_days.dat"
-#define LATS_FILE "output_data/ProCb/lats.dat"
-#define LONS_FILE "output_data/ProCb/lons.dat"
+
 
 typedef enum coords { THETA, PHI, N_COORDS } Coords;
 typedef enum depths { SURFACE, DEEP, N_DEPTHS } Depths;
