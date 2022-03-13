@@ -31,6 +31,7 @@ Created by Jake K. Eager
 #define R_PLANET (1.12384*6.371e6) // radius of planet in m (as fraction of Earth radius)
 #define EPSILON (0.00001) // 0.00001 pretty good need to find appropriate value
 #define OMEGA (6.501e-6) // angular frequency planet, about its central axis
+// #define OMEGA (7.272e-5) // Earth value for omega
 #define SIGMA (5.67e-8) // stefan boltzman constant
 #define H_S 50.0 // thickness of surface layer in m
 #define H_D 150.0 // thickness of deep layer below
@@ -45,33 +46,35 @@ Created by Jake K. Eager
 #define HOURS_PER_DAY 24.
 #define MINUTES_PER_HOUR 60.
 #define SECONDS_PER_MINUTE 60.
-#define DELTA_T (1.0*MINUTES_PER_HOUR*SECONDS_PER_MINUTE) // time step of 1 hours
-#define TIME_STEPS (15000*2) // for time step of 12 hours, 20,000 time steps needed for 10,000 day run
-#define TIME_OUTPUT_FREQ (25.0*HOURS_PER_DAY*MINUTES_PER_HOUR*SECONDS_PER_MINUTE) // print update frequency in seconds, but first term is number of days
-#define DATA_OUTPUT_FREQ (100.0*HOURS_PER_DAY*MINUTES_PER_HOUR*SECONDS_PER_MINUTE) // output frequency in seconds, but first term is number of days
+#define DELTA_T (12.0*MINUTES_PER_HOUR*SECONDS_PER_MINUTE) // time step of 1 hours
+#define TIME_STEPS (10000*2) // for time step of 12 hours, 20,000 time steps needed for 10,000 day run
+#define TIME_OUTPUT_FREQ (50.0*HOURS_PER_DAY*MINUTES_PER_HOUR*SECONDS_PER_MINUTE) // print update frequency in seconds, but first term is number of days
+#define DATA_OUTPUT_FREQ (250.0*HOURS_PER_DAY*MINUTES_PER_HOUR*SECONDS_PER_MINUTE) // output frequency in seconds, but first term is number of days
 #define TIME_OUTPUT_TOL (1e-6) // days
-#define T_OFFSET 0.0 // IF you want to restart run, specify start time here, so it doesn't save over stuff, and change input temp files to output ones
+#define T_OFFSET 5000.0 // IF you want to restart run, specify start time here, so it doesn't save over stuff, and change input temp files to output ones
 #define TOL 10
 #define MAX_ITER (1e-6)
 // input data files
 #define MAX_FILE_LINE_SIZE 4000
-#define SW_FLUX_NET_IN_DATA "input_data/ProCb/surface_net_downward_shortwave_flux.dat"
-#define LW_FLUX_IN_DATA "input_data/ProCb/surface_downwelling_longwave_flux_in_air.dat"
-#define LATENT_FLUX_DATA "input_data/ProCb/surface_upward_latent_heat_flux.dat"
-#define SENSIBLE_FLUX_DATA "input_data/ProCb/surface_upward_sensible_heat_flux.dat"
-// #define INITIAL_SURFACE_TEMP_DATA "output_data/ProCb/T_surf_14000_days.dat"
-// #define INITIAL_DEEP_TEMP_DATA "output_data/ProCb/T_deep_14000_days.dat"
-#define INITIAL_SURFACE_TEMP_DATA "input_data/ProCb/surface_temperature.dat"
-#define INITIAL_DEEP_TEMP_DATA "input_data/ProCb/surface_temperature.dat"
+#define SW_FLUX_NET_DOWN_DATA "input_data/ProCb/surface_net_downward_shortwave_flux.dat"
+#define LW_FLUX_DOWN_DATA "input_data/ProCb/surface_downwelling_longwave_flux_in_air.dat"
+#define LATENT_UP_FLUX_DATA "input_data/ProCb/surface_upward_latent_heat_flux.dat"
+#define SENSIBLE_UP_FLUX_DATA "input_data/ProCb/surface_upward_sensible_heat_flux.dat"
+#define INITIAL_SURFACE_TEMP_DATA "output_data/ProCb/T_surf_5000_days.dat"
+#define INITIAL_DEEP_TEMP_DATA "output_data/ProCb/T_deep_5000_days.dat"
+// #define INITIAL_SURFACE_TEMP_DATA "input_data/ProCb/surface_temperature.dat"
+// #define INITIAL_DEEP_TEMP_DATA "input_data/ProCb/surface_temperature.dat"
 #define U_WIND_DATA "input_data/ProCb/x_wind.dat"
 #define V_WIND_DATA "input_data/ProCb/y_wind.dat"
+#define X_STRESS_DATA "input_data/ProCb/surface_downward_eastward_stress.dat"
+#define Y_STRESS_DATA "input_data/ProCb/surface_downward_northward_stress.dat"
 #define LATS_FILE "input_data/lats.dat"
 #define LONS_FILE "input_data/lons.dat"
 // output data files
 #define MAX_FNAME_CHAR 100
 #define PYTHON_EXE "python"
-#define PYTHON_SCRIPT 		"plotting_scripts/zonal_mean_temp_new.py"
-#define OUTPUT_UPWARD_LW_SURFACE_FLUX "output_data/ProCb/upward_lw_surface_flux_"
+#define PYTHON_SCRIPT 		"plotting_scripts/equilibrium.py"
+#define OUTPUT_UPWARD_Q_FLUX "output_data/ProCb/upward_surface_Q_flux_"
 #define OUTPUT_SURFACE_TEMP_DATA "output_data/ProCb/T_surf_"
 #define OUTPUT_DEEP_TEMP_DATA "output_data/ProCb/T_deep_"
 #define OUTPUT_DATA_EXT "_days.dat"
@@ -251,13 +254,25 @@ static void write_data(double **var, char *fbasename, char *time_str, Grid_vals 
 	xfree(fname);
 }
 
-static void calc_lw_out_flux(double **F_lw_out, double **T_surf, Grid_vals *grid, int n_lats, int n_lons)
+static void calc_Q_flux(double **upward_Q_flux, double **T_surf, Grid_vals *grid, int n_lats, int n_lons)
 {
+	double **F_net_sw_down = create_2d_pointer(n_lats,n_lons);
+	double **F_lw_down = create_2d_pointer(n_lats,n_lons);
+	double **F_latent_up = create_2d_pointer(n_lats,n_lons);
+	double **F_sensible_up = create_2d_pointer(n_lats,n_lons);
+	read_input_data(F_net_sw_down,SW_FLUX_NET_DOWN_DATA,n_lats,n_lons);
+	read_input_data(F_lw_down,LW_FLUX_DOWN_DATA,n_lats,n_lons);
+	read_input_data(F_latent_up,LATENT_UP_FLUX_DATA,n_lats,n_lons);
+	read_input_data(F_sensible_up,SENSIBLE_UP_FLUX_DATA,n_lats,n_lons);
 	for(int i=0;i<n_lats;i++){
 		for(int j=0;j<n_lons;j++){
-			F_lw_out[i][j] = EMISSIVITY*SIGMA*pow(T_surf[i][j],4);
+			upward_Q_flux[i][j] = F_latent_up[i][j] + F_sensible_up[i][j] + EMISSIVITY*SIGMA*pow(T_surf[i][j],4) - (F_net_sw_down[i][j] + F_lw_down[i][j]);
 		}
 	}
+	destroy_2d_pointer(F_net_sw_down,n_lats);
+	destroy_2d_pointer(F_lw_down,n_lats);
+	destroy_2d_pointer(F_latent_up,n_lats);
+	destroy_2d_pointer(F_sensible_up,n_lats);
 }
 
 static void process_output_data(double ***T, Grid_vals *grid, int n_lats, int n_lons, double time)
@@ -269,11 +284,11 @@ static void process_output_data(double ***T, Grid_vals *grid, int n_lats, int n_
     char time_str[10];
     sprintf(time_str, "%d", day_int);
     // char *fname = (char*) xmalloc((MAX_FNAME_CHAR)*sizeof(char));
-    double **F_lw_out = create_2d_pointer(n_lats,n_lons);
-    calc_lw_out_flux(F_lw_out,T[SURFACE],grid,n_lats,n_lons);
+    double **upward_Q_flux= create_2d_pointer(n_lats,n_lons);
+    calc_Q_flux(upward_Q_flux,T[SURFACE],grid,n_lats,n_lons);
     // construct_fname(fname, MAX_FNAME_CHAR, OUTPUT_UPWARD_LW_SURFACE_FLUX, time_str, OUTPUT_DATA_EXT);
-    write_data(F_lw_out, OUTPUT_UPWARD_LW_SURFACE_FLUX, time_str, grid, n_lats, n_lons);
-    destroy_2d_pointer(F_lw_out,n_lats);
+    write_data(upward_Q_flux, OUTPUT_UPWARD_Q_FLUX, time_str, grid, n_lats, n_lons);
+    destroy_2d_pointer(upward_Q_flux,n_lats);
     // construct_fname(fname, MAX_FNAME_CHAR, OUTPUT_SURFACE_TEMP_DATA, time_str, OUTPUT_DATA_EXT);
     write_data(T[SURFACE], OUTPUT_SURFACE_TEMP_DATA, time_str, grid, n_lats, n_lons);
     // construct_fname(fname, MAX_FNAME_CHAR, OUTPUT_DEEP_TEMP_DATA, time_str, OUTPUT_DATA_EXT);
@@ -368,20 +383,20 @@ static void construct_grid(Grid_vals *grid, int n_lats, int n_lons, char *lats_f
 
 /* Calculates the surface stress on the ocean surface as a result of the atmospheric winds near the surface. 
 Reads in velocity data from .dat files */
-static void calculate_surface_stress(double ***tau, Grid_vals *grid, int n_lats, int n_lons)
-{
-	double ***v = create_3d_pointer(N_COORDS,N_LATS,N_LONS);
-	read_input_data(v[THETA],V_WIND_DATA,n_lats,n_lons);
-	read_input_data(v[PHI],U_WIND_DATA,n_lats,n_lons);
-	for(int coord=THETA;coord<N_COORDS;coord++){
-		for(int i=0;i<n_lats;i++){
-			for(int j=0;j<n_lons;j++){
-				tau[coord][i][j]=C_D*RHO_AIR*v[coord][i][j]*fabs(v[coord][i][j]); // retains sign of velocity
-			}
-		}
-	}
-	destroy_3d_pointer(v,N_COORDS,N_LATS);
-}
+// static void calculate_surface_stress(double ***tau, Grid_vals *grid, int n_lats, int n_lons)
+// {
+// 	double ***v = create_3d_pointer(N_COORDS,N_LATS,N_LONS);
+// 	// read_input_data(v[THETA],V_WIND_DATA,n_lats,n_lons);
+// 	// read_input_data(v[PHI],U_WIND_DATA,n_lats,n_lons);
+// 	for(int coord=THETA;coord<N_COORDS;coord++){
+// 		for(int i=0;i<n_lats;i++){
+// 			for(int j=0;j<n_lons;j++){
+// 				tau[coord][i][j]=C_D*RHO_AIR*v[coord][i][j]*fabs(v[coord][i][j]); // retains sign of velocity
+// 			}
+// 		}
+// 	}
+// 	destroy_3d_pointer(v,N_COORDS,N_LATS);
+// }
 
 /* Returns the coriolis parameter at an latitude theta */
 static double calculate_coriolis_parameter(double theta)
@@ -393,8 +408,9 @@ static double calculate_coriolis_parameter(double theta)
 static void calculate_mass_flux(double ***M, Grid_vals *grid, int n_lats, int n_lons)
 {
 	double ***tau = create_3d_pointer(N_COORDS,N_LATS,N_LONS);
-
-	calculate_surface_stress(tau, grid, n_lats, n_lons);
+	read_input_data(tau[THETA],Y_STRESS_DATA,n_lats,n_lons);
+	read_input_data(tau[PHI],X_STRESS_DATA,n_lats,n_lons);
+	// calculate_surface_stress(tau, grid, n_lats, n_lons);
 	for(int i=0;i<n_lats;i++){
 		double f = calculate_coriolis_parameter(grid->lat[i]);
 		for(int j=0;j<n_lons;j++){
@@ -451,32 +467,28 @@ static void calculate_matrix(gsl_spmatrix *A, Grid_vals *grid, int n_lats, int n
 	double s_dfsn = DELTA_T*D/pow(R_PLANET,2);
 	
 	for(int height=SURFACE; height<N_DEPTHS; height++){
-		// if(height == SURFACE){
-		// 	s_dfsn = DELTA_T*D*H_S/pow(R_PLANET,2);
-		// }
-		// else{
-		// 	s_dfsn = DELTA_T*D*H_D/pow(R_PLANET,2);
-		// }
 		double thickness = height_of_slab(height);
 		double s_ekmn = DELTA_T/(RHO_WATER*thickness);
 		for(int lat=0; lat<n_lats; lat++){
 			double theta = deg_to_rad(grid->lat[lat]);
 			for(int lon=0; lon<n_lons; lon++){
+				double Aij=0.0;
+				int i,j;
+				i = calculate_matrix_index(height,lat,lon,n_lats,n_lons);
+
 				double dM_theta_dtheta = dA_da(M[THETA],lat,lon,THETA,n_lats,n_lons);
 				double dM_phi_dphi = dA_da(M[PHI],lat,lon,PHI,n_lats,n_lons);
 				double M_theta = M[THETA][lat][lon];
 				double M_phi = M[PHI][lat][lon];
 				double div_M = calculate_div_M(M,grid,lat,lon,n_lats,n_lons);
-				double Aij=0.0;
-				int i,j;
-				i = calculate_matrix_index(height,lat,lon,n_lats,n_lons);
+				
 				/* central point */
 				j = i;
-				if(version == NO_TRANSPORT){
-					Aij=1.;
-				}
-				else{
-					Aij=1.+2.*s_dfsn*(1./pow(d_theta,2)+1./pow(cos(theta)*d_phi,2));
+				Aij=1.;
+				if(version != NO_TRANSPORT){
+					// if(height==SURFACE){
+					Aij+=2.*s_dfsn*(1./pow(d_theta,2)+1./pow(cos(theta)*d_phi,2));
+					// }
 					if(version==DIFUSION_EKMAN){
 						// Aij+= s_ekmn/R_PLANET*(dM_theta_dtheta-M_theta*tan(theta)+1./cos(theta)*dM_phi_dphi);
 						if(height==SURFACE){
@@ -495,9 +507,25 @@ static void calculate_matrix(gsl_spmatrix *A, Grid_vals *grid, int n_lats, int n
 				}
 				gsl_spmatrix_set(A, i, j, Aij);
 				/* Neigbouring points */
+				int lon_j, lat_j;
 				if(version != NO_TRANSPORT){
 					/* neighbouring latitude - below */
+					if(lat==0){
+						lon_j = calculate_new_lon(lon,n_lons);
+						lat_j = lat;
+						j = calculate_matrix_index(height,lat_j,lon_j,n_lats,n_lons);
+					}
+					else{
+						lon_j = lon;
+						lat_j = lat-1;
+						j = calculate_matrix_index(height,lat_j,lon_j,n_lats,n_lons);
+					}
+					// if(height==SURFACE){
 					Aij=-s_dfsn*(1./pow(d_theta,2)+tan(theta)/(2*d_theta));
+					// }
+					// else{
+					// 	Aij=0.0;
+					// }
 					if(version==DIFUSION_EKMAN){
 						if(height==SURFACE){
 							Aij+= s_ekmn/R_PLANET*(-M_theta/(2.*d_theta));
@@ -506,16 +534,24 @@ static void calculate_matrix(gsl_spmatrix *A, Grid_vals *grid, int n_lats, int n
 							Aij+= -s_ekmn/R_PLANET*(-M_theta/(2.*d_theta));	
 						}
 					}
-					if(lat==0){
-						int new_lon = calculate_new_lon(lon,n_lons);
-						j = calculate_matrix_index(height,lat,new_lon,n_lats,n_lons);
-					}
-					else{
-						j = calculate_matrix_index(height,lat-1,lon,n_lats,n_lons);
-					}
 					gsl_spmatrix_set(A, i, j, Aij);
 					/* neighbouring latitude - above */
+					if(lat==n_lats-1){
+						lon_j = calculate_new_lon(lon,n_lons);
+						lat_j = lat;
+						j = calculate_matrix_index(height,lat_j,lon_j,n_lats,n_lons);
+					}
+					else{
+						lon_j = lon;
+						lat_j = lat+1;
+						j = calculate_matrix_index(height,lat_j,lon_j,n_lats,n_lons);
+					}
+					// if(height==SURFACE){
 					Aij=-s_dfsn*(1./pow(d_theta,2)-tan(theta)/(2*d_theta));
+					// }
+					// else{
+					// 	Aij=0.0;
+					// }
 					if(version==DIFUSION_EKMAN){
 						if(height==SURFACE){
 							Aij+= s_ekmn/R_PLANET*(M_theta/(2.*d_theta));
@@ -524,16 +560,24 @@ static void calculate_matrix(gsl_spmatrix *A, Grid_vals *grid, int n_lats, int n
 							Aij+= -s_ekmn/R_PLANET*(M_theta/(2.*d_theta));
 						}
 					}
-					if(lat==n_lats-1){
-						int new_lon = calculate_new_lon(lon,n_lons);
-						j = calculate_matrix_index(height,lat,new_lon,n_lats,n_lons);
-					}
-					else{
-						j = calculate_matrix_index(height,lat+1,lon,n_lats,n_lons);
-					}
 					gsl_spmatrix_set(A, i, j, Aij);
 					/* neighbouring longitude - left */
+					if(lon==0){
+						lon_j = n_lons-1;
+						lat_j = lat;
+						j = calculate_matrix_index(height,lat_j,lon_j,n_lats,n_lons);
+					}
+					else{
+						lon_j = lon-1;
+						lat_j = lat;
+						j = calculate_matrix_index(height,lat_j,lon_j,n_lats,n_lons);
+					}
+					// if(height==SURFACE){
 					Aij=-s_dfsn*1./pow(cos(theta)*d_phi,2);
+					// }
+					// else{
+					// 	Aij=0.0;
+					// }
 					if(version==DIFUSION_EKMAN){
 						if(height==SURFACE){
 							Aij+= s_ekmn/R_PLANET*(-M_phi/(2.*d_phi*cos(theta)));
@@ -542,16 +586,24 @@ static void calculate_matrix(gsl_spmatrix *A, Grid_vals *grid, int n_lats, int n
 							Aij+= -s_ekmn/R_PLANET*(-M_phi/(2.*d_phi*cos(theta)));
 						}
 					}
-					if(lon==0){
-						int new_lon = n_lons-1;
-						j = calculate_matrix_index(height,lat,new_lon,n_lats,n_lons);
-					}
-					else{
-						j = calculate_matrix_index(height,lat,lon-1,n_lats,n_lons);
-					}
 					gsl_spmatrix_set(A, i, j, Aij);
 					/* neighbouring longitude - right */
+					if(lon==n_lons-1){
+						lon_j = 0;
+						lat_j = lat;
+						j = calculate_matrix_index(height,lat_j,lon_j,n_lats,n_lons);
+					}
+					else{
+						lon_j = lon+1;
+						lat_j = lat;
+						j = calculate_matrix_index(height,lat_j,lon_j,n_lats,n_lons);
+					}
+					// if(height==SURFACE){
 					Aij=-s_dfsn*1./pow(cos(theta)*d_phi,2);
+					// }
+					// else{
+					// 	Aij=0.0;
+					// }
 					if(version==DIFUSION_EKMAN){
 						if(height==SURFACE){
 							Aij+= s_ekmn/R_PLANET*(M_phi/(2.*d_phi*cos(theta)));
@@ -559,13 +611,6 @@ static void calculate_matrix(gsl_spmatrix *A, Grid_vals *grid, int n_lats, int n
 						else{
 							Aij+= -s_ekmn/R_PLANET*(M_phi/(2.*d_phi*cos(theta)));
 						}
-					}
-					if(lon==n_lons-1){
-						int new_lon = 0;
-						j = calculate_matrix_index(height,lat,new_lon,n_lats,n_lons);
-					}
-					else{
-						j = calculate_matrix_index(height,lat,lon+1,n_lats,n_lons);
 					}
 					gsl_spmatrix_set(A, i, j, Aij);
 					/* interaction between deep and surface layer */
@@ -592,23 +637,23 @@ static void calculate_matrix(gsl_spmatrix *A, Grid_vals *grid, int n_lats, int n
 and incoming lw flux from atmospheric emission */
 static void calculate_F_a(double **F_a, int n_lats, int n_lons)
 {
-	double **F_net_sw_in = create_2d_pointer(n_lats,n_lons);
-	double **F_lw_in = create_2d_pointer(n_lats,n_lons);
-	double **F_latent_in = create_2d_pointer(n_lats,n_lons);
-	double **F_sensible_in = create_2d_pointer(n_lats,n_lons);
-	read_input_data(F_net_sw_in,SW_FLUX_NET_IN_DATA,n_lats,n_lons);
-	read_input_data(F_lw_in,LW_FLUX_IN_DATA,n_lats,n_lons);
-	read_input_data(F_latent_in,LATENT_FLUX_DATA,n_lats,n_lons);
-	read_input_data(F_sensible_in,SENSIBLE_FLUX_DATA,n_lats,n_lons);
+	double **F_net_sw_down = create_2d_pointer(n_lats,n_lons);
+	double **F_lw_down = create_2d_pointer(n_lats,n_lons);
+	double **F_latent_up = create_2d_pointer(n_lats,n_lons);
+	double **F_sensible_up = create_2d_pointer(n_lats,n_lons);
+	read_input_data(F_net_sw_down,SW_FLUX_NET_DOWN_DATA,n_lats,n_lons);
+	read_input_data(F_lw_down,LW_FLUX_DOWN_DATA,n_lats,n_lons);
+	read_input_data(F_latent_up,LATENT_UP_FLUX_DATA,n_lats,n_lons);
+	read_input_data(F_sensible_up,SENSIBLE_UP_FLUX_DATA,n_lats,n_lons);
 	for(int i=0;i<n_lats;i++){
 		for(int j=0;j<n_lons;j++){
-			F_a[i][j] = (F_net_sw_in[i][j] + F_lw_in[i][j]) - F_latent_in[i][j] - F_sensible_in[i][j];
+			F_a[i][j] = (F_net_sw_down[i][j] + F_lw_down[i][j]) - F_latent_up[i][j] - F_sensible_up[i][j];
 		}
 	}
-	destroy_2d_pointer(F_net_sw_in,n_lats);
-	destroy_2d_pointer(F_lw_in,n_lats);
-	destroy_2d_pointer(F_latent_in,n_lats);
-	destroy_2d_pointer(F_sensible_in,n_lats);
+	destroy_2d_pointer(F_net_sw_down,n_lats);
+	destroy_2d_pointer(F_lw_down,n_lats);
+	destroy_2d_pointer(F_latent_up,n_lats);
+	destroy_2d_pointer(F_sensible_up,n_lats);
 }
 
 /* Checks if convetion condition is met, then calculates the associated flux. */
@@ -633,7 +678,7 @@ static void calculate_vector_b(double ***T, gsl_vector *b, int n_lats, int n_lon
 	double **F_a = create_2d_pointer(n_lats,n_lons);
 	calculate_F_a(F_a,n_lats,n_lons);
 	double **F_c = create_2d_pointer(n_lats,n_lons);
-	calculate_F_c(F_c,T,n_lats,n_lons);
+	calculate_F_c(F_c,T,n_lats,n_lons);	
 	double b_hij = 0.0;
 	for(int h=0;h<N_DEPTHS;h++){
 		for(int i=0;i<n_lats;i++){
@@ -645,6 +690,7 @@ static void calculate_vector_b(double ***T, gsl_vector *b, int n_lats, int n_lon
 				else{
 					b_hij = 1.0/(RHO_WATER*C_V*depth)*(-F_c[i][j])*DELTA_T + T[h][i][j];
 				}
+				// }
 				gsl_vector_set(b, (h*n_lats*n_lons+(i*n_lons+j)), b_hij);
 			}
 		}

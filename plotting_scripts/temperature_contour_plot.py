@@ -11,9 +11,9 @@ mpl.rcParams["font.family"] = "serif"
 csfont = {'fontname':'Times New Roman'}
 plt.rcParams['mathtext.fontset']='dejavuserif'
 
-input_data_path = "/Users/jeager/Documents/PhD_work/codron_ocean/input_data/ProCb"
-output_data_path = "/Users/jeager/Documents/PhD_work/codron_ocean/output_data/ProCb"
-plot_path = "/Users/jeager/Documents/PhD_work/codron_ocean/plots"
+input_data_path = "/Users/jeager/Documents/PhD_work/ekman_ocean/input_data/ProCb"
+output_data_path = "/Users/jeager/Documents/PhD_work/ekman_ocean/output_data/ProCb"
+plot_path = "/Users/jeager/Documents/PhD_work/ekman_ocean/plots"
 
 lats_file = "lats.dat"
 lons_file = "lons.dat"
@@ -27,8 +27,8 @@ T_init_file = "surface_temperature.dat"
 T_init_data = np.loadtxt(T_init_file, delimiter="\t",usecols=lons_index)
 
 os.chdir(output_data_path)
-T_surf_file = "T_surf_15000_days.dat"
-T_deep_file = "T_deep_15000_days.dat"
+T_surf_file = "T_surf_10000_days.dat"
+T_deep_file = "T_deep_10000_days.dat"
 T_surf_data = np.loadtxt(T_surf_file, delimiter="\t",usecols=lons_index)
 T_deep_data = np.loadtxt(T_deep_file, delimiter="\t",usecols=lons_index)
 surf_diff = T_surf_data - T_init_data

@@ -11,16 +11,16 @@ mpl.rcParams["font.family"] = "serif"
 csfont = {'fontname':'Times New Roman'}
 plt.rcParams['mathtext.fontset']='dejavuserif'
 
-input_data_path = "/Users/jeager/Documents/PhD_work/codron_ocean/input_data/ProCb"
-output_data_path = "/Users/jeager/Documents/PhD_work/codron_ocean/output_data/ProCb"
-plot_path = "/Users/jeager/Documents/PhD_work/codron_ocean/plots"
+input_data_path = "/Users/jeager/Documents/PhD_work/ekman_ocean/input_data/ProCb"
+output_data_path = "/Users/jeager/Documents/PhD_work/ekman_ocean/output_data/ProCb"
+plot_path = "/Users/jeager/Documents/PhD_work/ekman_ocean/plots"
 lats_file = "lats.dat"
 lons_file = "lons.dat"
 T_surf_data = []
 T_deep_data = []
 
-t_num=151
-t_step=100
+t_num=41
+t_step=250
 t = []
 times = []
 for i in range(0,t_num):

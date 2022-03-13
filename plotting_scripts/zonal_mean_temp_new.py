@@ -11,9 +11,9 @@ mpl.rcParams["font.family"] = "serif"
 csfont = {'fontname':'Times New Roman'}
 plt.rcParams['mathtext.fontset']='dejavuserif'
 
-input_data_path = "/Users/jeager/Documents/PhD_work/codron_ocean/input_data/ProCb"
-output_data_path = "/Users/jeager/Documents/PhD_work/codron_ocean/output_data/ProCb"
-plot_path = "/Users/jeager/Documents/PhD_work/codron_ocean/plots"
+input_data_path = "/Users/jeager/Documents/PhD_work/ekman_ocean/input_data/ProCb"
+output_data_path = "/Users/jeager/Documents/PhD_work/ekman_ocean/output_data/ProCb"
+plot_path = "/Users/jeager/Documents/PhD_work/ekman_ocean/plots"
 
 lats_file = "lats.dat"
 lons_file = "lons.dat"
@@ -36,7 +36,7 @@ layers = [
 	]
 os.chdir(output_data_path)
 for layer in layers:
-    T_file = "T_"+layer+"_15000_days.dat"
+    T_file = "T_"+layer+"_10000_days.dat"
     T_data[layer] = np.loadtxt(T_file, delimiter="\t",usecols=lons_index)
     split_T = np.split(T_data[layer],4,axis=1)
     day_T_data = np.concatenate((split_T[1],split_T[2]), axis=1)
