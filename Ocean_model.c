@@ -47,23 +47,26 @@ Created by Jake K. Eager
 #define MINUTES_PER_HOUR 60.
 #define SECONDS_PER_MINUTE 60.
 #define DELTA_T (12.0*MINUTES_PER_HOUR*SECONDS_PER_MINUTE) // time step of 1 hours
-#define TIME_STEPS (10000*2) // for time step of 12 hours, 20,000 time steps needed for 10,000 day run
-#define TIME_OUTPUT_FREQ (50.0*HOURS_PER_DAY*MINUTES_PER_HOUR*SECONDS_PER_MINUTE) // print update frequency in seconds, but first term is number of days
-#define DATA_OUTPUT_FREQ (250.0*HOURS_PER_DAY*MINUTES_PER_HOUR*SECONDS_PER_MINUTE) // output frequency in seconds, but first term is number of days
+#define TIME_STEPS (20000*2) // for time step of 12 hours, 20,000 time steps needed for 10,000 day run
+#define TIME_OUTPUT_FREQ (25.0*HOURS_PER_DAY*MINUTES_PER_HOUR*SECONDS_PER_MINUTE) // print update frequency in seconds, but first term is number of days
+#define DATA_OUTPUT_FREQ (100.0*HOURS_PER_DAY*MINUTES_PER_HOUR*SECONDS_PER_MINUTE) // output frequency in seconds, but first term is number of days
 #define TIME_OUTPUT_TOL (1e-6) // days
-#define T_OFFSET 5000.0 // IF you want to restart run, specify start time here, so it doesn't save over stuff, and change input temp files to output ones
-#define TOL 10
-#define MAX_ITER (1e-6)
+#define T_OFFSET 0.0 // IF you want to restart run, specify start time here, so it doesn't save over stuff, and change input temp files to output ones
+#define TOL (1e-6)
+#define MAX_ITER 100
 // input data files
+// #define LAND_MASK_DATA "input_data/land_mask_day_cont_100_180.dat"
+#define LAND_MASK_DATA "input_data/land_mask_no_land.dat"
 #define MAX_FILE_LINE_SIZE 4000
 #define SW_FLUX_NET_DOWN_DATA "input_data/ProCb/surface_net_downward_shortwave_flux.dat"
 #define LW_FLUX_DOWN_DATA "input_data/ProCb/surface_downwelling_longwave_flux_in_air.dat"
+// #define LW_FLUX_DOWN_DATA "input_data/ProCb/surface_net_downward_longwave_flux.dat"
 #define LATENT_UP_FLUX_DATA "input_data/ProCb/surface_upward_latent_heat_flux.dat"
 #define SENSIBLE_UP_FLUX_DATA "input_data/ProCb/surface_upward_sensible_heat_flux.dat"
-#define INITIAL_SURFACE_TEMP_DATA "output_data/ProCb/T_surf_5000_days.dat"
-#define INITIAL_DEEP_TEMP_DATA "output_data/ProCb/T_deep_5000_days.dat"
-// #define INITIAL_SURFACE_TEMP_DATA "input_data/ProCb/surface_temperature.dat"
-// #define INITIAL_DEEP_TEMP_DATA "input_data/ProCb/surface_temperature.dat"
+// #define INITIAL_SURFACE_TEMP_DATA "output_data/ProCb/T_surf_1000_days.dat"
+// #define INITIAL_DEEP_TEMP_DATA "output_data/ProCb/T_deep_1000_days.dat"
+#define INITIAL_SURFACE_TEMP_DATA "input_data/ProCb/surface_temperature.dat"
+#define INITIAL_DEEP_TEMP_DATA "input_data/ProCb/surface_temperature.dat"
 #define U_WIND_DATA "input_data/ProCb/x_wind.dat"
 #define V_WIND_DATA "input_data/ProCb/y_wind.dat"
 #define X_STRESS_DATA "input_data/ProCb/surface_downward_eastward_stress.dat"
@@ -73,10 +76,13 @@ Created by Jake K. Eager
 // output data files
 #define MAX_FNAME_CHAR 100
 #define PYTHON_EXE "python"
-#define PYTHON_SCRIPT 		"plotting_scripts/equilibrium.py"
+#define PYTHON_SCRIPT 		"plotting_scripts/temperature_contour_plot.py"
 #define OUTPUT_UPWARD_Q_FLUX "output_data/ProCb/upward_surface_Q_flux_"
 #define OUTPUT_SURFACE_TEMP_DATA "output_data/ProCb/T_surf_"
 #define OUTPUT_DEEP_TEMP_DATA "output_data/ProCb/T_deep_"
+#define OUTPUT_X_MASS_FLUX_DATA "output_data/ProCb/eastward_flow_"
+#define OUTPUT_Y_MASS_FLUX_DATA "output_data/ProCb/northward_flow_"
+#define OUTPUT_VERITCAL_FLUX_DATA "output_data/ProCb/vertical_mass_flux_"
 #define OUTPUT_DATA_EXT "_days.dat"
 
 
@@ -149,6 +155,25 @@ static void xfree(void *p)
         exit(FREE_ERR);
     }
 	free(p);
+}
+
+/* allocates a 2d array of pointers */
+static int **create_2d_int_pointer(int n, int m)
+{
+	int **p = (int **)xmalloc(n*sizeof(int*));
+	for(int i=0;i<n;i++){
+		p[i]=(int *)xmalloc(m*sizeof(int));
+	}
+	return p;
+}
+
+/* frees a 2d array of pointers */
+static void destroy_2d_int_pointer(int **p, int n)
+{
+	for(int i=0;i<n;i++){
+		xfree(p[i]);
+	}
+	xfree(p);
 }
 
 /* allocates a 2d array of pointers */
@@ -237,6 +262,29 @@ static void read_input_data(double **var, char *filename, int n_lats, int n_lons
   	fclose(input);
 }
 
+/* reads in a .dat files called filename, that contains integer data with n_lats rows and n_lons collumns, ie UM output data */
+static void read_input_int_data(int **var, char *filename, int n_lats, int n_lons)
+{
+	char line[MAX_FILE_LINE_SIZE];
+	char *data = line;
+	FILE *input;
+	input = xfopen(filename, "r" );
+	int offset;
+	for(int i=0;i<n_lats;i++){
+		fgets(line, MAX_FILE_LINE_SIZE, input);
+		for(int j=0;j<n_lons;j++){
+			int found = sscanf(data, " %d%n", &var[i][j], &offset);
+			if(found!=1){
+				fprintf(stderr, "%s does not contain enough longitudinal points.\n", filename);
+				exit(READ_DATA_ERR);
+			}
+			data+=offset;
+		}
+		data=line;
+	}
+  	fclose(input);
+}
+
 /* writes out put data to filename on a grid of n_lats by n_lons. */
 static void write_data(double **var, char *fbasename, char *time_str, Grid_vals *grid, int n_lats, int n_lons)
 {
@@ -273,27 +321,6 @@ static void calc_Q_flux(double **upward_Q_flux, double **T_surf, Grid_vals *grid
 	destroy_2d_pointer(F_lw_down,n_lats);
 	destroy_2d_pointer(F_latent_up,n_lats);
 	destroy_2d_pointer(F_sensible_up,n_lats);
-}
-
-static void process_output_data(double ***T, Grid_vals *grid, int n_lats, int n_lons, double time)
-{ // processes output data
-    double days = T_OFFSET+time/(HOURS_PER_DAY*MINUTES_PER_HOUR*SECONDS_PER_MINUTE);
-    days=round(days);
-    printf("Data outputted at %lg\n", days);
-    int day_int = days+TIME_OUTPUT_TOL;
-    char time_str[10];
-    sprintf(time_str, "%d", day_int);
-    // char *fname = (char*) xmalloc((MAX_FNAME_CHAR)*sizeof(char));
-    double **upward_Q_flux= create_2d_pointer(n_lats,n_lons);
-    calc_Q_flux(upward_Q_flux,T[SURFACE],grid,n_lats,n_lons);
-    // construct_fname(fname, MAX_FNAME_CHAR, OUTPUT_UPWARD_LW_SURFACE_FLUX, time_str, OUTPUT_DATA_EXT);
-    write_data(upward_Q_flux, OUTPUT_UPWARD_Q_FLUX, time_str, grid, n_lats, n_lons);
-    destroy_2d_pointer(upward_Q_flux,n_lats);
-    // construct_fname(fname, MAX_FNAME_CHAR, OUTPUT_SURFACE_TEMP_DATA, time_str, OUTPUT_DATA_EXT);
-    write_data(T[SURFACE], OUTPUT_SURFACE_TEMP_DATA, time_str, grid, n_lats, n_lons);
-    // construct_fname(fname, MAX_FNAME_CHAR, OUTPUT_DEEP_TEMP_DATA, time_str, OUTPUT_DATA_EXT);
-    write_data(T[DEEP], OUTPUT_DEEP_TEMP_DATA, time_str, grid, n_lats, n_lons);
-    // xfree(fname);
 }
 
 /* convert angle in degrees to radians for evaluating trigonometric functions in calculus */
@@ -345,6 +372,61 @@ static double dA_da(double **A, int i, int j, int a, int n_lats, int n_lons)
 	}
 }
 
+/* Returns the horizontal divergence of quanitity M. determines whether there is an up or downward flow between the ocean layers */ 
+static double calculate_div_M(double ***M, Grid_vals *grid, int i, int j, int n_lats, int n_lons)
+{
+	double theta=deg_to_rad(grid->lat[i]);
+	double dM_theta_dtheta = dA_da(M[THETA],i,j,THETA,n_lats,n_lons);
+	double dM_phi_dphi = dA_da(M[PHI],i,j,PHI,n_lats,n_lons);
+	double div_M=1./R_PLANET*(dM_theta_dtheta-tan(theta)*M[THETA][i][j]+1./cos(theta)*dM_phi_dphi);
+	return div_M;
+}
+
+static void calc_flow_Sv(double ***Sv_flow, double ***M, Grid_vals *grid, int n_lats, int n_lons)
+{
+	for(int i=0;i<n_lats;i++){
+		double theta=deg_to_rad(grid->lat[i]);
+		for(int j=0;j<n_lons;j++){
+			Sv_flow[PHI][i][j] = M[PHI][i][j] * R_PLANET * DELTA_LAT * M_PI / 180. / RHO_WATER / 1.0e6;
+			Sv_flow[THETA][i][j] = M[THETA][i][j] * R_PLANET * cos(theta) * deg_to_rad(DELTA_LON) / RHO_WATER / 1.0e6;
+		}
+	}
+}
+
+static void process_output_data(double ***T, double ***M, Grid_vals *grid, int n_lats, int n_lons, double time)
+{ // processes output data
+    double days = T_OFFSET+time/(HOURS_PER_DAY*MINUTES_PER_HOUR*SECONDS_PER_MINUTE);
+    days=round(days);
+    printf("Data outputted at %lg\n", days);
+    int day_int = days+TIME_OUTPUT_TOL;
+    char time_str[10];
+    sprintf(time_str, "%d", day_int);
+    // char *fname = (char*) xmalloc((MAX_FNAME_CHAR)*sizeof(char));
+    double **upward_Q_flux= create_2d_pointer(n_lats,n_lons);
+    calc_Q_flux(upward_Q_flux,T[SURFACE],grid,n_lats,n_lons);
+    // construct_fname(fname, MAX_FNAME_CHAR, OUTPUT_UPWARD_LW_SURFACE_FLUX, time_str, OUTPUT_DATA_EXT);
+    write_data(upward_Q_flux, OUTPUT_UPWARD_Q_FLUX, time_str, grid, n_lats, n_lons);
+    destroy_2d_pointer(upward_Q_flux,n_lats);
+    double ***Sv_flow = create_3d_pointer(N_COORDS,N_LATS,N_LONS);
+    calc_flow_Sv(Sv_flow,M,grid,n_lats,n_lons);
+    write_data(Sv_flow[PHI], OUTPUT_X_MASS_FLUX_DATA, time_str, grid, n_lats, n_lons);
+    write_data(Sv_flow[THETA], OUTPUT_Y_MASS_FLUX_DATA, time_str, grid, n_lats, n_lons);
+ 	destroy_3d_pointer(Sv_flow,N_COORDS,N_LATS);
+    double **div_M= create_2d_pointer(n_lats,n_lons);
+    for(int i=0;i<n_lats;i++){
+		for(int j=0;j<n_lons;j++){
+			div_M[i][j] = calculate_div_M(M,grid,i,j,n_lats,n_lons);
+		}
+	}
+	write_data(div_M, OUTPUT_VERITCAL_FLUX_DATA, time_str, grid, n_lats, n_lons);
+	destroy_2d_pointer(div_M,n_lats);
+    // construct_fname(fname, MAX_FNAME_CHAR, OUTPUT_SURFACE_TEMP_DATA, time_str, OUTPUT_DATA_EXT);
+    write_data(T[SURFACE], OUTPUT_SURFACE_TEMP_DATA, time_str, grid, n_lats, n_lons);
+    // construct_fname(fname, MAX_FNAME_CHAR, OUTPUT_DEEP_TEMP_DATA, time_str, OUTPUT_DATA_EXT);
+    write_data(T[DEEP], OUTPUT_DEEP_TEMP_DATA, time_str, grid, n_lats, n_lons);
+    // xfree(fname);
+}
+
 /* returns height of layer given index h, from enum heights. */
 static double height_of_slab(int h)
 {
@@ -383,20 +465,20 @@ static void construct_grid(Grid_vals *grid, int n_lats, int n_lons, char *lats_f
 
 /* Calculates the surface stress on the ocean surface as a result of the atmospheric winds near the surface. 
 Reads in velocity data from .dat files */
-// static void calculate_surface_stress(double ***tau, Grid_vals *grid, int n_lats, int n_lons)
-// {
-// 	double ***v = create_3d_pointer(N_COORDS,N_LATS,N_LONS);
-// 	// read_input_data(v[THETA],V_WIND_DATA,n_lats,n_lons);
-// 	// read_input_data(v[PHI],U_WIND_DATA,n_lats,n_lons);
-// 	for(int coord=THETA;coord<N_COORDS;coord++){
-// 		for(int i=0;i<n_lats;i++){
-// 			for(int j=0;j<n_lons;j++){
-// 				tau[coord][i][j]=C_D*RHO_AIR*v[coord][i][j]*fabs(v[coord][i][j]); // retains sign of velocity
-// 			}
-// 		}
-// 	}
-// 	destroy_3d_pointer(v,N_COORDS,N_LATS);
-// }
+static void calculate_surface_stress(double ***tau, Grid_vals *grid, int n_lats, int n_lons)
+{
+	double ***v = create_3d_pointer(N_COORDS,N_LATS,N_LONS);
+	read_input_data(v[THETA],V_WIND_DATA,n_lats,n_lons);
+	read_input_data(v[PHI],U_WIND_DATA,n_lats,n_lons);
+	for(int coord=THETA;coord<N_COORDS;coord++){
+		for(int i=0;i<n_lats;i++){
+			for(int j=0;j<n_lons;j++){
+				tau[coord][i][j]=C_D*RHO_AIR*v[coord][i][j]*fabs(v[coord][i][j]); // retains sign of velocity
+			}
+		}
+	}
+	destroy_3d_pointer(v,N_COORDS,N_LATS);
+}
 
 /* Returns the coriolis parameter at an latitude theta */
 static double calculate_coriolis_parameter(double theta)
@@ -405,21 +487,28 @@ static double calculate_coriolis_parameter(double theta)
 }
 
 /* calculates the mass flux due to Ekman transport */
-static void calculate_mass_flux(double ***M, Grid_vals *grid, int n_lats, int n_lons)
+static void calculate_mass_flux(double ***M, int **land_mask, Grid_vals *grid, int n_lats, int n_lons)
 {
 	double ***tau = create_3d_pointer(N_COORDS,N_LATS,N_LONS);
-	read_input_data(tau[THETA],Y_STRESS_DATA,n_lats,n_lons);
-	read_input_data(tau[PHI],X_STRESS_DATA,n_lats,n_lons);
-	// calculate_surface_stress(tau, grid, n_lats, n_lons);
+	// read_input_data(tau[THETA],Y_STRESS_DATA,n_lats,n_lons);
+	// read_input_data(tau[PHI],X_STRESS_DATA,n_lats,n_lons);
+	calculate_surface_stress(tau, grid, n_lats, n_lons);
 	for(int i=0;i<n_lats;i++){
 		double f = calculate_coriolis_parameter(grid->lat[i]);
 		for(int j=0;j<n_lons;j++){
-			M[THETA][i][j]=(EPSILON*tau[THETA][i][j]+f*tau[PHI][i][j])/(pow(EPSILON,2)+pow(f,2));
-			M[PHI][i][j]=(EPSILON*tau[PHI][i][j]-f*tau[THETA][i][j])/(pow(EPSILON,2)+pow(f,2));
+			if(land_mask[i][j]==1){
+				M[THETA][i][j]=0.;
+				M[PHI][i][j]=0.;
+			}
+			else{
+				M[THETA][i][j]=(EPSILON*tau[THETA][i][j]+f*tau[PHI][i][j])/(pow(EPSILON,2)+pow(f,2));
+				M[PHI][i][j]=(EPSILON*tau[PHI][i][j]-f*tau[THETA][i][j])/(pow(EPSILON,2)+pow(f,2));
+			}
 		}
 	}
 	destroy_3d_pointer(tau,N_COORDS,N_LATS);
 }
+
 
 /* Plots the script called filename in python */
 static void plot_data(char *filename)
@@ -427,16 +516,6 @@ static void plot_data(char *filename)
 	char command[PATH_MAX];
 	snprintf(command, sizeof(command), "%s %s", PYTHON_EXE, filename);
 	system( command );
-}
-
-/* Returns the horizontal divergence of quanitity M. determines whether there is an up or downward flow between the ocean layers */ 
-static double calculate_div_M(double ***M, Grid_vals *grid, int i, int j, int n_lats, int n_lons)
-{
-	double theta=deg_to_rad(grid->lat[i]);
-	double dM_theta_dtheta = dA_da(M[THETA],i,j,THETA,n_lats,n_lons);
-	double dM_phi_dphi = dA_da(M[PHI],i,j,PHI,n_lats,n_lons);
-	double div_M=1./R_PLANET*(dM_theta_dtheta-tan(theta)*M[THETA][i][j]+1./cos(theta)*dM_phi_dphi);
-	return div_M;
 }
 
 /* Calculates the index for the matrix used in the solver, before being compressed */
@@ -458,54 +537,56 @@ static int calculate_new_lon(int lon, int n_lons)
 
 /* calculates and sets the matrix elements for a 2 layer ocean with 144 longitude points and 90 latitude points.
 version determines whether the matrix is calculated for a no horizontal transport model, diffusion only model or the full Ekman model. */
-static void calculate_matrix(gsl_spmatrix *A, Grid_vals *grid, int n_lats, int n_lons, int version)
+static void calculate_matrix(gsl_spmatrix *A, double ***M, int **land_mask, Grid_vals *grid, int n_lats, int n_lons, int version)
 {
-	double ***M=create_3d_pointer(N_COORDS,N_LATS,N_LONS);
-	calculate_mass_flux(M, grid, n_lats, n_lons);
 	double d_theta=deg_to_rad(DELTA_LAT);
 	double d_phi=deg_to_rad(DELTA_LON);
 	double s_dfsn = DELTA_T*D/pow(R_PLANET,2);
 	
 	for(int height=SURFACE; height<N_DEPTHS; height++){
 		double thickness = height_of_slab(height);
-		double s_ekmn = DELTA_T/(RHO_WATER*thickness);
+		double s_ekmn = DELTA_T/(RHO_WATER*thickness*R_PLANET);
 		for(int lat=0; lat<n_lats; lat++){
 			double theta = deg_to_rad(grid->lat[lat]);
 			for(int lon=0; lon<n_lons; lon++){
-				double Aij=0.0;
-				int i,j;
+				double Aii=0.0;
+				int i;
 				i = calculate_matrix_index(height,lat,lon,n_lats,n_lons);
-
+				/* central point - check if land */
+				if(land_mask[lat][lon]==1){
+					Aii=1.;
+					gsl_spmatrix_set(A, i, i, Aii);
+					continue;
+				}
 				double dM_theta_dtheta = dA_da(M[THETA],lat,lon,THETA,n_lats,n_lons);
 				double dM_phi_dphi = dA_da(M[PHI],lat,lon,PHI,n_lats,n_lons);
 				double M_theta = M[THETA][lat][lon];
 				double M_phi = M[PHI][lat][lon];
 				double div_M = calculate_div_M(M,grid,lat,lon,n_lats,n_lons);
-				
+				double Aij=0.0;
+				int j;
 				/* central point */
-				j = i;
-				Aij=1.;
+				Aii=1.;
 				if(version != NO_TRANSPORT){
 					// if(height==SURFACE){
-					Aij+=2.*s_dfsn*(1./pow(d_theta,2)+1./pow(cos(theta)*d_phi,2));
+					Aii+= 2.*s_dfsn*(1./pow(d_theta,2)+1./pow(cos(theta)*d_phi,2));
 					// }
 					if(version==DIFUSION_EKMAN){
-						// Aij+= s_ekmn/R_PLANET*(dM_theta_dtheta-M_theta*tan(theta)+1./cos(theta)*dM_phi_dphi);
 						if(height==SURFACE){
-							Aij+= s_ekmn/R_PLANET*(dM_theta_dtheta-M_theta*tan(theta)+1./cos(theta)*dM_phi_dphi);
+							Aii+= s_ekmn*(dM_theta_dtheta-M_theta*tan(theta)+1./cos(theta)*dM_phi_dphi);
 							if(div_M<0.0){
-								Aij+=(+div_M);
+								Aii+=(-DELTA_T/(RHO_WATER*thickness)*div_M);
 							}
 						}
 						else if(height==DEEP){
-							Aij+= -s_ekmn/R_PLANET*(dM_theta_dtheta-M_theta*tan(theta)+1./cos(theta)*dM_phi_dphi);
+							Aii+= -s_ekmn*(dM_theta_dtheta-M_theta*tan(theta)+1./cos(theta)*dM_phi_dphi);
 							if(div_M>0.0){
-								Aij+=(-div_M);
+								Aii+=(+DELTA_T/(RHO_WATER*thickness)*div_M);
 							}
 						}
 					}
 				}
-				gsl_spmatrix_set(A, i, j, Aij);
+				gsl_spmatrix_set(A, i, i, Aii);
 				/* Neigbouring points */
 				int lon_j, lat_j;
 				if(version != NO_TRANSPORT){
@@ -520,19 +601,18 @@ static void calculate_matrix(gsl_spmatrix *A, Grid_vals *grid, int n_lats, int n
 						lat_j = lat-1;
 						j = calculate_matrix_index(height,lat_j,lon_j,n_lats,n_lons);
 					}
-					// if(height==SURFACE){
 					Aij=-s_dfsn*(1./pow(d_theta,2)+tan(theta)/(2*d_theta));
-					// }
-					// else{
-					// 	Aij=0.0;
-					// }
 					if(version==DIFUSION_EKMAN){
 						if(height==SURFACE){
-							Aij+= s_ekmn/R_PLANET*(-M_theta/(2.*d_theta));
+							Aij+= s_ekmn*(-M_theta/(2.*d_theta));
 						}
 						else{
-							Aij+= -s_ekmn/R_PLANET*(-M_theta/(2.*d_theta));	
+							Aij+= -s_ekmn*(-M_theta/(2.*d_theta));	
 						}
+					}
+					if(land_mask[lat_j][lon_j]==1){
+						Aii+=Aij;
+						Aij=0.;
 					}
 					gsl_spmatrix_set(A, i, j, Aij);
 					/* neighbouring latitude - above */
@@ -546,19 +626,18 @@ static void calculate_matrix(gsl_spmatrix *A, Grid_vals *grid, int n_lats, int n
 						lat_j = lat+1;
 						j = calculate_matrix_index(height,lat_j,lon_j,n_lats,n_lons);
 					}
-					// if(height==SURFACE){
 					Aij=-s_dfsn*(1./pow(d_theta,2)-tan(theta)/(2*d_theta));
-					// }
-					// else{
-					// 	Aij=0.0;
-					// }
 					if(version==DIFUSION_EKMAN){
 						if(height==SURFACE){
-							Aij+= s_ekmn/R_PLANET*(M_theta/(2.*d_theta));
+							Aij+= s_ekmn*(M_theta/(2.*d_theta));
 						}
 						else{
-							Aij+= -s_ekmn/R_PLANET*(M_theta/(2.*d_theta));
+							Aij+= -s_ekmn*(M_theta/(2.*d_theta));
 						}
+					}
+					if(land_mask[lat_j][lon_j]==1){
+						Aii+=Aij;
+						Aij=0.;
 					}
 					gsl_spmatrix_set(A, i, j, Aij);
 					/* neighbouring longitude - left */
@@ -572,19 +651,18 @@ static void calculate_matrix(gsl_spmatrix *A, Grid_vals *grid, int n_lats, int n
 						lat_j = lat;
 						j = calculate_matrix_index(height,lat_j,lon_j,n_lats,n_lons);
 					}
-					// if(height==SURFACE){
 					Aij=-s_dfsn*1./pow(cos(theta)*d_phi,2);
-					// }
-					// else{
-					// 	Aij=0.0;
-					// }
 					if(version==DIFUSION_EKMAN){
 						if(height==SURFACE){
-							Aij+= s_ekmn/R_PLANET*(-M_phi/(2.*d_phi*cos(theta)));
+							Aij+= s_ekmn*(-M_phi/(2.*d_phi*cos(theta)));
 						}
 						else{
-							Aij+= -s_ekmn/R_PLANET*(-M_phi/(2.*d_phi*cos(theta)));
+							Aij+= -s_ekmn*(-M_phi/(2.*d_phi*cos(theta)));
 						}
+					}
+					if(land_mask[lat_j][lon_j]==1){
+						Aii+=Aij;
+						Aij=0.;
 					}
 					gsl_spmatrix_set(A, i, j, Aij);
 					/* neighbouring longitude - right */
@@ -598,30 +676,30 @@ static void calculate_matrix(gsl_spmatrix *A, Grid_vals *grid, int n_lats, int n
 						lat_j = lat;
 						j = calculate_matrix_index(height,lat_j,lon_j,n_lats,n_lons);
 					}
-					// if(height==SURFACE){
 					Aij=-s_dfsn*1./pow(cos(theta)*d_phi,2);
-					// }
-					// else{
-					// 	Aij=0.0;
-					// }
 					if(version==DIFUSION_EKMAN){
 						if(height==SURFACE){
-							Aij+= s_ekmn/R_PLANET*(M_phi/(2.*d_phi*cos(theta)));
+							Aij+= s_ekmn*(M_phi/(2.*d_phi*cos(theta)));
 						}
 						else{
-							Aij+= -s_ekmn/R_PLANET*(M_phi/(2.*d_phi*cos(theta)));
+							Aij+= -s_ekmn*(M_phi/(2.*d_phi*cos(theta)));
 						}
 					}
+					if(land_mask[lat_j][lon_j]==1){
+						Aii+=Aij;
+						Aij=0.;
+					}
 					gsl_spmatrix_set(A, i, j, Aij);
+					gsl_spmatrix_set(A, i, i, Aii);
 					/* interaction between deep and surface layer */
 					if(version==DIFUSION_EKMAN){
 						if(height==SURFACE && div_M>0.0){
-							Aij=(+div_M);
+							Aij=(-DELTA_T/(RHO_WATER*thickness)*div_M);
 							j = calculate_matrix_index(DEEP,lat,lon,n_lats,n_lons);
 							gsl_spmatrix_set(A, i, j, Aij);
 						}
 						else if(height==DEEP && div_M<0.0){
-							Aij=(-div_M);
+							Aij=(+DELTA_T/(RHO_WATER*thickness)*div_M);
 							j = calculate_matrix_index(SURFACE,lat,lon,n_lats,n_lons);
 							gsl_spmatrix_set(A, i, j, Aij);
 						}
@@ -630,7 +708,6 @@ static void calculate_matrix(gsl_spmatrix *A, Grid_vals *grid, int n_lats, int n
 			}
 		}
 	}
-	destroy_3d_pointer(M,N_COORDS,N_LATS);
 }
 
 /* Reads in atmospheric fluxes, net stellar sw flux (subrtracts reflected sw radiation from the incident) 
@@ -647,7 +724,7 @@ static void calculate_F_a(double **F_a, int n_lats, int n_lons)
 	read_input_data(F_sensible_up,SENSIBLE_UP_FLUX_DATA,n_lats,n_lons);
 	for(int i=0;i<n_lats;i++){
 		for(int j=0;j<n_lons;j++){
-			F_a[i][j] = (F_net_sw_down[i][j] + F_lw_down[i][j]) - F_latent_up[i][j] - F_sensible_up[i][j];
+			F_a[i][j] = (F_net_sw_down[i][j] + F_lw_down[i][j]) - (F_latent_up[i][j] + F_sensible_up[i][j]);
 		}
 	}
 	destroy_2d_pointer(F_net_sw_down,n_lats);
@@ -673,7 +750,7 @@ static void calculate_F_c(double **F_c, double ***T, int n_lats, int n_lons)
 
 /* calculated and sets the vector b in matrix Ax=b. EMISSIVITY*SIGMA*T^4 is a blackbody emission from one of the layers, 
 to ensure an energy exchange between the layers. 1.0/(RHO_WATER*C_V*H_S) prefactor converts a flux in W/m2 to K/s */
-static void calculate_vector_b(double ***T, gsl_vector *b, int n_lats, int n_lons)
+static void calculate_vector_b(double ***T, int **land_mask, gsl_vector *b, int n_lats, int n_lons)
 { // calculates b from matrix equation Ax=b
 	double **F_a = create_2d_pointer(n_lats,n_lons);
 	calculate_F_a(F_a,n_lats,n_lons);
@@ -683,14 +760,19 @@ static void calculate_vector_b(double ***T, gsl_vector *b, int n_lats, int n_lon
 	for(int h=0;h<N_DEPTHS;h++){
 		for(int i=0;i<n_lats;i++){
 			for(int j=0;j<n_lons;j++){
-				double depth = height_of_slab(h);
-				if(h==SURFACE){
-					b_hij = 1.0/(RHO_WATER*C_V*depth)*(F_c[i][j]+F_a[i][j]-EMISSIVITY*SIGMA*pow(T[SURFACE][i][j],4))*DELTA_T + T[h][i][j];
+				if(land_mask[i][j]==1){
+					b_hij = T[h][i][j];
 				}
 				else{
-					b_hij = 1.0/(RHO_WATER*C_V*depth)*(-F_c[i][j])*DELTA_T + T[h][i][j];
+					double depth = height_of_slab(h);
+					if(h==SURFACE){
+						b_hij = DELTA_T/(RHO_WATER*C_V*depth)*(F_c[i][j]+F_a[i][j]-EMISSIVITY*SIGMA*pow(T[SURFACE][i][j],4))+ T[h][i][j];
+						// b_hij = DELTA_T/(RHO_WATER*C_V*depth)*(F_c[i][j]+F_a[i][j]) + T[h][i][j];
+					}
+					else{
+						b_hij = DELTA_T/(RHO_WATER*C_V*depth)*(-F_c[i][j]) + T[h][i][j];
+					}
 				}
-				// }
 				gsl_vector_set(b, (h*n_lats*n_lons+(i*n_lons+j)), b_hij);
 			}
 		}
@@ -700,7 +782,7 @@ static void calculate_vector_b(double ***T, gsl_vector *b, int n_lats, int n_lon
 }
 
 /* Uses GSL sparse linear algebra to solve Ax=b */
-static void calculate_new_T(double ***T, Grid_vals *grid, int n_lats, int n_lons, int version)
+static void calculate_new_T(double ***T, double ***M, int **land_mask, Grid_vals *grid, int n_lats, int n_lons, int version)
 {
 	int n = N_DEPTHS*n_lats*n_lons;
 	gsl_spmatrix *A = gsl_spmatrix_alloc(n ,n);
@@ -708,8 +790,8 @@ static void calculate_new_T(double ***T, Grid_vals *grid, int n_lats, int n_lons
 	gsl_vector *b = gsl_vector_alloc(n);
 	gsl_vector *x = gsl_vector_alloc(n);
 
-	calculate_matrix(A,grid,n_lats,n_lons,version);
-	calculate_vector_b(T,b,n_lats,n_lons);
+	calculate_matrix(A,M,land_mask,grid,n_lats,n_lons,version);
+	calculate_vector_b(T,land_mask,b,n_lats,n_lons);
 	C = gsl_spmatrix_ccs(A);
 
 	/* now solve the system with the GMRES iterative solver */
@@ -723,6 +805,13 @@ static void calculate_new_T(double ***T, Grid_vals *grid, int n_lats, int n_lons
 
     /* initial guess x = 0 */
     gsl_vector_set_zero(x);
+ //    for(int h=0;h<N_DEPTHS;h++){
+	// 	for(int i=0;i<n_lats;i++){
+	// 		for(int j=0;j<n_lons;j++){
+	// 		gsl_vector_set(x, (h*n_lats*n_lons+(i*n_lons+j)), T[h][i][j]);
+	// 		}
+	// 	}
+	// }
 
     /* solve the system A x = b */
     do{
@@ -763,21 +852,27 @@ static void time_stepper(int n_times, int n_lats, int n_lons, int version)
 	double ***T=create_3d_pointer(N_DEPTHS,N_LATS,N_LONS);
 	read_input_data(T[SURFACE],INITIAL_SURFACE_TEMP_DATA,n_lats,n_lons);
 	read_input_data(T[DEEP],INITIAL_DEEP_TEMP_DATA,n_lats,n_lons);
+	int **land_mask = create_2d_int_pointer(n_lats,n_lons);
+	read_input_int_data(land_mask,LAND_MASK_DATA,n_lats,n_lons);
+	double ***M=create_3d_pointer(N_COORDS,N_LATS,N_LONS);
 	double time = 0.;
 	double days = 0.;
 	for(int t=0;t<n_times;t++){
 		time = ((double)t+1.)*DELTA_T;
-		calculate_new_T(T,grid,n_lats,n_lons,version);
+		calculate_mass_flux(M,land_mask,grid,n_lats,n_lons);
+		calculate_new_T(T,M,land_mask,grid,n_lats,n_lons,version);
 		if (fmod(time,TIME_OUTPUT_FREQ)<TIME_OUTPUT_TOL){
 			days = T_OFFSET+time/(HOURS_PER_DAY*MINUTES_PER_HOUR*SECONDS_PER_MINUTE);
 			printf("Days passed = %lg\n", days);
 		}
 		if (fmod(time,DATA_OUTPUT_FREQ)<TIME_OUTPUT_TOL){
-			process_output_data(T, grid, n_lats, n_lons, time);
+			process_output_data(T, M, grid, n_lats, n_lons, time);
 		}
 	}
-	process_output_data(T, grid, n_lats, n_lons, time);
+	destroy_2d_int_pointer(land_mask,n_lats);
+	process_output_data(T, M, grid, n_lats, n_lons, time);
 	plot_data(PYTHON_SCRIPT);
+	destroy_3d_pointer(M,N_COORDS,N_LATS);
 	destroy_3d_pointer(T,N_DEPTHS,N_LATS);
 	xfree(grid);
 }
