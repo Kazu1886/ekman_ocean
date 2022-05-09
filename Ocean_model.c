@@ -75,8 +75,8 @@ Created by Jake K. Eager
 #define LONS_FILE "input_data/lons.dat"
 // output data files
 #define MAX_FNAME_CHAR 100
-#define PYTHON_EXE "python"
-#define PYTHON_SCRIPT 		"plotting_scripts/temperature_contour_plot.py"
+// #define PYTHON_EXE "python"
+// #define PYTHON_SCRIPT 		"plotting_scripts/temperature_contour_plot.py"
 #define OUTPUT_UPWARD_Q_FLUX "output_data/ProCb/upward_surface_Q_flux_"
 #define OUTPUT_SURFACE_TEMP_DATA "output_data/ProCb/T_surf_"
 #define OUTPUT_DEEP_TEMP_DATA "output_data/ProCb/T_deep_"
@@ -511,12 +511,12 @@ static void calculate_mass_flux(double ***M, int **land_mask, Grid_vals *grid, i
 
 
 /* Plots the script called filename in python */
-static void plot_data(char *filename)
-{ 
-	char command[PATH_MAX];
-	snprintf(command, sizeof(command), "%s %s", PYTHON_EXE, filename);
-	system( command );
-}
+// static void plot_data(char *filename)
+// { 
+// 	char command[PATH_MAX];
+// 	snprintf(command, sizeof(command), "%s %s", PYTHON_EXE, filename);
+// 	system( command );
+// }
 
 /* Calculates the index for the matrix used in the solver, before being compressed */
 static int calculate_matrix_index(int height, int lat, int lon, int n_lats, int n_lons)
@@ -871,7 +871,7 @@ static void time_stepper(int n_times, int n_lats, int n_lons, int version)
 	}
 	destroy_2d_int_pointer(land_mask,n_lats);
 	process_output_data(T, M, grid, n_lats, n_lons, time);
-	plot_data(PYTHON_SCRIPT);
+	// plot_data(PYTHON_SCRIPT);
 	destroy_3d_pointer(M,N_COORDS,N_LATS);
 	destroy_3d_pointer(T,N_DEPTHS,N_LATS);
 	xfree(grid);
